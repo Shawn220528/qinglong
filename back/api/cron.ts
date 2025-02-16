@@ -58,8 +58,12 @@ export default (app: Router) => {
     async (req: Request, res: Response, next: NextFunction) => {
       try {
         const cronViewService = Container.get(CronViewService);
-        const data = await cronViewService.update(req.body);
-        return res.send({ code: 200, data });
+        if (req.body.type === 1) {
+          return res.send({ code: 400, message: '参数错误' });
+        } else {
+          const data = await cronViewService.update(req.body);
+          return res.send({ code: 200, data });
+        }
       } catch (e) {
         return next(e);
       }
@@ -148,6 +152,21 @@ export default (app: Router) => {
     }
   });
 
+  route.get(
+    '/detail',
+    async (req: Request, res: Response, next: NextFunction) => {
+      const logger: Logger = Container.get('logger');
+      try {
+        const cronService = Container.get(CronService);
+        const data = await cronService.find(req.query as any);
+        return res.send({ code: 200, data });
+      } catch (e) {
+        logger.error('🔥 error: %o', e);
+        return next(e);
+      }
+    },
+  );
+
   route.post(
     '/',
     celebrate({
@@ -156,6 +175,10 @@ export default (app: Router) => {
         schedule: Joi.string().required(),
         name: Joi.string().optional(),
         labels: Joi.array().optional(),
+        sub_id: Joi.number().optional().allow(null),
+        extra_schedules: Joi.array().optional().allow(null),
+        task_before: Joi.string().optional().allow('').allow(null),
+        task_after: Joi.string().optional().allow('').allow(null),
       }),
     }),
     async (req: Request, res: Response, next: NextFunction) => {
@@ -312,6 +335,10 @@ export default (app: Router) => {
         command: Joi.string().required(),
         schedule: Joi.string().required(),
         name: Joi.string().optional().allow(null),
+        sub_id: Joi.number().optional().allow(null),
+        extra_schedules: Joi.array().optional().allow(null),
+        task_before: Joi.string().optional().allow('').allow(null),
+        task_after: Joi.string().optional().allow('').allow(null),
         id: Joi.number().required(),
       }),
     }),
@@ -431,13 +458,12 @@ export default (app: Router) => {
       }),
     }),
     async (req: Request, res: Response, next: NextFunction) => {
-      const logger: Logger = Container.get('logger');
       try {
         const cronService = Container.get(CronService);
         const data = await cronService.status({
           ...req.body,
-          status: parseInt(req.body.status),
-          pid: parseInt(req.body.pid) || '',
+          status: req.body.status ? parseInt(req.body.status) : undefined,
+          pid: req.body.pid ? parseInt(req.body.pid) : undefined,
         });
         return res.send({ code: 200, data });
       } catch (e) {
