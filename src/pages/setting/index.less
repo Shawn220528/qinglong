@@ -28,10 +28,17 @@
   }
 }
 
-.ql-setting-container {
-  .ant-tabs-content-holder {
-    max-height: calc(100vh - 114px);
-    max-height: calc(100vh - var(--vh-offset, 114px));
-    overflow-y: auto;
+.dependence-config-wrapper {
+  display: flex;
+  gap: 40px;
+}
+
+.ql-container-wrapper.ql-setting-container {
+  .ant-tabs-tabpane > div {
+    padding-left: 2px;
+  }
+
+  .ant-tabs-tabpane > .ant-form {
+    padding-left: 2px;
   }
 }

@@ -4,7 +4,8 @@ import { Logger } from 'winston';
 import CronService from '../services/cron';
 import CronViewService from '../services/cronView';
 import { celebrate, Joi } from 'celebrate';
-import cron_parser from 'cron-parser';
+import { commonCronSchema } from '../validation/schedule';
+
 const route = Router();
 
 export default (app: Router) => {
@@ -58,8 +59,12 @@ export default (app: Router) => {
     async (req: Request, res: Response, next: NextFunction) => {
       try {
         const cronViewService = Container.get(CronViewService);
-        const data = await cronViewService.update(req.body);
-        return res.send({ code: 200, data });
+        if (req.body.type === 1) {
+          return res.send({ code: 400, message: '参数错误' });
+        } else {
+          const data = await cronViewService.update(req.body);
+          return res.send({ code: 200, data });
+        }
       } catch (e) {
         return next(e);
       }
@@ -148,26 +153,32 @@ export default (app: Router) => {
     }
   });
 
+  route.get(
+    '/detail',
+    async (req: Request, res: Response, next: NextFunction) => {
+      const logger: Logger = Container.get('logger');
+      try {
+        const cronService = Container.get(CronService);
+        const data = await cronService.find(req.query as any);
+        return res.send({ code: 200, data });
+      } catch (e) {
+        logger.error('🔥 error: %o', e);
+        return next(e);
+      }
+    },
+  );
+
   route.post(
     '/',
     celebrate({
-      body: Joi.object({
-        command: Joi.string().required(),
-        schedule: Joi.string().required(),
-        name: Joi.string().optional(),
-        labels: Joi.array().optional(),
-      }),
+      body: Joi.object(commonCronSchema),
     }),
     async (req: Request, res: Response, next: NextFunction) => {
       const logger: Logger = Container.get('logger');
       try {
-        if (cron_parser.parseExpression(req.body.schedule).hasNext()) {
-          const cronService = Container.get(CronService);
-          const data = await cronService.create(req.body);
-          return res.send({ code: 200, data });
-        } else {
-          return res.send({ code: 400, message: 'param schedule error' });
-        }
+        const cronService = Container.get(CronService);
+        const data = await cronService.create(req.body);
+        return res.send({ code: 200, data });
       } catch (e) {
         return next(e);
       }
@@ -308,26 +319,16 @@ export default (app: Router) => {
     '/',
     celebrate({
       body: Joi.object({
-        labels: Joi.array().optional().allow(null),
-        command: Joi.string().required(),
-        schedule: Joi.string().required(),
-        name: Joi.string().optional().allow(null),
+        ...commonCronSchema,
         id: Joi.number().required(),
       }),
     }),
     async (req: Request, res: Response, next: NextFunction) => {
       const logger: Logger = Container.get('logger');
       try {
-        if (
-          !req.body.schedule ||
-          cron_parser.parseExpression(req.body.schedule).hasNext()
-        ) {
-          const cronService = Container.get(CronService);
-          const data = await cronService.update(req.body);
-          return res.send({ code: 200, data });
-        } else {
-          return res.send({ code: 400, message: 'param schedule error' });
-        }
+        const cronService = Container.get(CronService);
+        const data = await cronService.update(req.body);
+        return res.send({ code: 200, data });
       } catch (e) {
         return next(e);
       }
@@ -391,7 +392,7 @@ export default (app: Router) => {
       const logger: Logger = Container.get('logger');
       try {
         const cronService = Container.get(CronService);
-        const data = await cronService.import_crontab();
+        const data = await cronService.importCrontab();
         return res.send({ code: 200, data });
       } catch (e) {
         return next(e);
@@ -431,13 +432,12 @@ export default (app: Router) => {
       }),
     }),
     async (req: Request, res: Response, next: NextFunction) => {
-      const logger: Logger = Container.get('logger');
       try {
         const cronService = Container.get(CronService);
         const data = await cronService.status({
           ...req.body,
-          status: parseInt(req.body.status),
-          pid: parseInt(req.body.pid) || '',
+          status: req.body.status ? parseInt(req.body.status) : undefined,
+          pid: req.body.pid ? parseInt(req.body.pid) : undefined,
         });
         return res.send({ code: 200, data });
       } catch (e) {
