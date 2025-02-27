@@ -1,9 +1,13 @@
-import React, { useEffect, useState } from 'react';
-import { Modal, message, Input, Form, Button } from 'antd';
-import { request } from '@/utils/http';
-import config from '@/utils/config';
-import cronParse from 'cron-parser';
 import EditableTagGroup from '@/components/tag';
+import config from '@/utils/config';
+import { request } from '@/utils/http';
+import { MinusCircleOutlined, PlusOutlined } from '@ant-design/icons';
+import { Button, Form, Input, Modal, Select, Space, message } from 'antd';
+import cronParse from 'cron-parser';
+import { useEffect, useState } from 'react';
+import intl from 'react-intl-universal';
+import { getScheduleType, scheduleTypeMap } from './const';
+import { ScheduleType } from './type';
 
 const CronModal = ({
   cron,
@@ -16,50 +20,137 @@ const CronModal = ({
 }) => {
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
+  const [scheduleType, setScheduleType] = useState<ScheduleType>(
+    cron ? getScheduleType(cron.schedule) : ScheduleType.Normal,
+  );
 
   const handleOk = async (values: any) => {
     setLoading(true);
-    const method = cron ? 'put' : 'post';
-    const payload = { ...values };
-    if (cron) {
-      payload.id = cron.id;
-    }
     try {
-      const { code, data } = await request[method](`${config.apiPrefix}crons`, {
-        data: payload,
-      });
+      const method = cron?.id ? 'put' : 'post';
+      const payload = {
+        ...values,
+        schedule:
+          scheduleType !== ScheduleType.Normal
+            ? scheduleTypeMap[scheduleType]
+            : values.schedule,
+      };
+
+      if (cron?.id) {
+        payload.id = cron.id;
+      }
+
+      const { code, data } = await request[method](
+        `${config.apiPrefix}crons`,
+        payload,
+      );
 
       if (code === 200) {
-        message.success(cron ? '更新Cron成功' : '新建Cron成功');
+        message.success(
+          cron?.id ? intl.get('更新任务成功') : intl.get('创建任务成功'),
+        );
         handleCancel(data);
       }
-      setLoading(false);
     } catch (error: any) {
+      console.error(error);
+    } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
     form.resetFields();
+    setScheduleType(getScheduleType(cron?.schedule));
   }, [cron, visible]);
+
+  const handleScheduleTypeChange = (type: ScheduleType) => {
+    setScheduleType(type);
+    form.setFieldValue('schedule', '');
+  };
+
+  const renderScheduleOptions = () => (
+    <Select
+      defaultValue={scheduleType}
+      value={scheduleType}
+      onChange={handleScheduleTypeChange}
+    >
+      <Select.Option value={ScheduleType.Normal}>
+        {intl.get('常规定时')}
+      </Select.Option>
+      <Select.Option value={ScheduleType.Once}>
+        {intl.get('手动运行')}
+      </Select.Option>
+      <Select.Option value={ScheduleType.Boot}>
+        {intl.get('开机运行')}
+      </Select.Option>
+    </Select>
+  );
+
+  const renderScheduleFields = () => {
+    if (scheduleType !== ScheduleType.Normal) return null;
+
+    return (
+      <>
+        <Form.Item
+          name="schedule"
+          label={intl.get('定时规则')}
+          rules={[
+            { required: true },
+            {
+              validator: (_, value) => {
+                if (!value || cronParse.parseExpression(value).hasNext()) {
+                  return Promise.resolve();
+                }
+                return Promise.reject(intl.get('Cron表达式格式有误'));
+              },
+            },
+          ]}
+        >
+          <Input placeholder={intl.get('秒(可选) 分 时 天 月 周')} />
+        </Form.Item>
+        <Form.List name="extra_schedules">
+          {(fields, { add, remove }, { errors }) => (
+            <>
+              {fields.map(({ key, name, ...restField }) => (
+                <Form.Item key={key} noStyle>
+                  <Space className="view-create-modal-sorts" align="baseline">
+                    <Form.Item
+                      {...restField}
+                      name={[name, 'schedule']}
+                      rules={[{ required: true }]}
+                    >
+                      <Input
+                        placeholder={intl.get('秒(可选) 分 时 天 月 周')}
+                      />
+                    </Form.Item>
+                    <MinusCircleOutlined
+                      className="dynamic-delete-button"
+                      onClick={() => remove(name)}
+                    />
+                  </Space>
+                </Form.Item>
+              ))}
+              <Form.Item>
+                <a onClick={() => add({ schedule: '' })}>
+                  <PlusOutlined /> {intl.get('新增定时规则')}
+                </a>
+              </Form.Item>
+              <Form.ErrorList errors={errors} />
+            </>
+          )}
+        </Form.List>
+      </>
+    );
+  };
 
   return (
     <Modal
-      title={cron ? '编辑任务' : '新建任务'}
+      title={cron?.id ? intl.get('编辑任务') : intl.get('创建任务')}
       open={visible}
       forceRender
       centered
       maskClosable={false}
-      onOk={() => {
-        form
-          .validateFields()
-          .then((values) => {
-            handleOk(values);
-          })
-          .catch((info) => {
-            console.log('Validate Failed:', info);
-          });
-      }}
+      onOk={() => form.validateFields().then(handleOk)}
       onCancel={() => handleCancel()}
       confirmLoading={loading}
     >
@@ -69,40 +160,88 @@ const CronModal = ({
         name="form_in_modal"
         initialValues={cron}
       >
-        <Form.Item name="name" label="名称">
-          <Input placeholder="请输入任务名称" />
+        <Form.Item
+          name="name"
+          label={intl.get('名称')}
+          rules={[{ required: true, whitespace: true }]}
+        >
+          <Input placeholder={intl.get('请输入任务名称')} />
         </Form.Item>
         <Form.Item
           name="command"
-          label="命令"
+          label={intl.get('命令/脚本')}
           rules={[{ required: true, whitespace: true }]}
         >
           <Input.TextArea
             rows={4}
-            autoSize={true}
-            placeholder="请输入要执行的命令"
+            autoSize={{ minRows: 1, maxRows: 5 }}
+            placeholder={intl.get(
+              '支持输入脚本路径/任意系统可执行命令/task 脚本路径',
+            )}
           />
         </Form.Item>
+        <Form.Item label={intl.get('定时类型')} required>
+          {renderScheduleOptions()}
+        </Form.Item>
+        {renderScheduleFields()}
+        <Form.Item name="labels" label={intl.get('标签')}>
+          <EditableTagGroup />
+        </Form.Item>
         <Form.Item
-          name="schedule"
-          label="定时规则"
+          name="task_before"
+          label={intl.get('执行前')}
+          tooltip={intl.get(
+            '运行任务前执行的命令，比如 cp/mv/python3 xxx.py/node xxx.js',
+          )}
           rules={[
-            { required: true },
             {
-              validator: (rule, value) => {
-                if (!value || cronParse.parseExpression(value).hasNext()) {
-                  return Promise.resolve();
-                } else {
-                  return Promise.reject('Cron表达式格式有误');
+              validator(_, value) {
+                if (
+                  value &&
+                  (value.includes(' task ') || value.startsWith('task '))
+                ) {
+                  return Promise.reject(intl.get('不能包含 task 命令'));
                 }
+                return Promise.resolve();
               },
             },
           ]}
         >
-          <Input placeholder="秒(可选) 分 时 天 月 周" />
+          <Input.TextArea
+            rows={4}
+            autoSize={{ minRows: 1, maxRows: 5 }}
+            placeholder={intl.get(
+              '请输入运行任务前要执行的命令，不能包含 task 命令',
+            )}
+          />
         </Form.Item>
-        <Form.Item name="labels" label="标签">
-          <EditableTagGroup />
+        <Form.Item
+          name="task_after"
+          label={intl.get('执行后')}
+          tooltip={intl.get(
+            '运行任务后执行的命令，比如 cp/mv/python3 xxx.py/node xxx.js',
+          )}
+          rules={[
+            {
+              validator(_, value) {
+                if (
+                  value &&
+                  (value.includes(' task ') || value.startsWith('task '))
+                ) {
+                  return Promise.reject(intl.get('不能包含 task 命令'));
+                }
+                return Promise.resolve();
+              },
+            },
+          ]}
+        >
+          <Input.TextArea
+            rows={4}
+            autoSize={{ minRows: 1, maxRows: 5 }}
+            placeholder={intl.get(
+              '请输入运行任务后要执行的命令，不能包含 task 命令',
+            )}
+          />
         </Form.Item>
       </Form>
     </Modal>
@@ -130,14 +269,14 @@ const CronLabelModal = ({
         try {
           const { code, data } = await request[action](
             `${config.apiPrefix}crons/labels`,
-            {
-              data: payload,
-            },
+            payload,
           );
 
           if (code === 200) {
             message.success(
-              action === 'post' ? '添加Labels成功' : '删除Labels成功',
+              action === 'post'
+                ? intl.get('添加Labels成功')
+                : intl.get('删除Labels成功'),
             );
             handleCancel(true);
           }
@@ -156,18 +295,18 @@ const CronLabelModal = ({
   }, [ids, visible]);
 
   const buttons = [
-    <Button onClick={() => handleCancel(false)}>取消</Button>,
+    <Button onClick={() => handleCancel(false)}>{intl.get('取消')}</Button>,
     <Button type="primary" danger onClick={() => update('delete')}>
-      删除
+      {intl.get('删除')}
     </Button>,
     <Button type="primary" onClick={() => update('post')}>
-      添加
+      {intl.get('添加')}
     </Button>,
   ];
 
   return (
     <Modal
-      title="批量修改标签"
+      title={intl.get('批量修改标签')}
       open={visible}
       footer={buttons}
       centered
@@ -177,7 +316,7 @@ const CronLabelModal = ({
       confirmLoading={loading}
     >
       <Form form={form} layout="vertical" name="form_in_label_modal">
-        <Form.Item name="labels" label="标签">
+        <Form.Item name="labels" label={intl.get('标签')}>
           <EditableTagGroup />
         </Form.Item>
       </Form>
@@ -185,4 +324,5 @@ const CronLabelModal = ({
   );
 };
 
-export { CronModal as default, CronLabelModal };
+export { CronLabelModal, CronModal as default };
+

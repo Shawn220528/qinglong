@@ -1,3 +1,4 @@
+import intl from 'react-intl-universal';
 import React, { useEffect, useState } from 'react';
 import { Typography, Input, Form, Button, message, Descriptions } from 'antd';
 import styles from './index.less';
@@ -5,11 +6,6 @@ import { SharedContext } from '@/layouts';
 import dayjs from 'dayjs';
 
 const { Link } = Typography;
-
-enum TVersion {
-  'develop' = '开发版',
-  'master' = '正式版',
-}
 
 const About = ({ systemInfo }: { systemInfo: SharedContext['systemInfo'] }) => {
   return (
@@ -20,21 +16,29 @@ const About = ({ systemInfo }: { systemInfo: SharedContext['systemInfo'] }) => {
         src="https://qn.whyour.cn/logo.png"
       />
       <div className={styles.right}>
-        <span className={styles.title}>青龙</span>
+        <span className={styles.title}>{intl.get('青龙')}</span>
         <span className={styles.desc}>
-          支持python3、javaScript、shell、typescript 的定时任务管理面板（A timed
-          task management panel that supports typescript, javaScript, python3,
-          and shell.）
+          {intl.get(
+            '支持python3、javascript、shell、typescript 的定时任务管理面板',
+          )}
         </span>
         <Descriptions>
-          <Descriptions.Item label="版本" span={3}>
-            {TVersion[systemInfo.branch]} v{systemInfo.version}
+          <Descriptions.Item label={intl.get('版本')} span={3}>
+            {systemInfo?.branch === 'develop'
+              ? intl.get('开发版')
+              : intl.get('正式版')}{' '}
+            v{systemInfo.version}
           </Descriptions.Item>
-          <Descriptions.Item label="更新时间" span={3}>
-            {dayjs(systemInfo.lastCommitTime).format('YYYY-MM-DD HH:mm:ss')}
+          <Descriptions.Item label={intl.get('更新时间')} span={3}>
+            {dayjs(systemInfo.publishTime * 1000).format('YYYY-MM-DD HH:mm')}
           </Descriptions.Item>
-          <Descriptions.Item label="更新ID" span={3}>
-            {systemInfo.lastCommitId}
+          <Descriptions.Item label={intl.get('更新日志')} span={3}>
+            <Link
+              href={`https://qn.whyour.cn/version.yaml?t=${Date.now()}`}
+              target="_blank"
+            >
+              {intl.get('查看')}
+            </Link>
           </Descriptions.Item>
         </Descriptions>
         <div>
@@ -50,13 +54,13 @@ const About = ({ systemInfo }: { systemInfo: SharedContext['systemInfo'] }) => {
             target="_blank"
             style={{ marginRight: 15 }}
           >
-            Telegram频道
+            {intl.get('Telegram频道')}
           </Link>
           <Link
             href="https://github.com/whyour/qinglong/issues"
             target="_blank"
           >
-            提交BUG
+            {intl.get('提交BUG')}
           </Link>
         </div>
       </div>
